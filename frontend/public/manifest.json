@@ -1,0 +1,24 @@
+{
+  "short_name": "KisanMitra",
+  "name": "KisanMitra AI - Your AI Farming Companion",
+  "description": "Speak, show or type your farming problem and get an understandable action plan.",
+  "start_url": ".",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#15803D",
+  "background_color": "#F9F8F6",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -1,0 +1,59 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+    margin: 0;
+    font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background-color: #F9F8F6;
+}
+
+.font-\[Manrope\] { font-family: 'Manrope', sans-serif; }
+
+::selection {
+    background: #15803D;
+    color: #fff;
+}
+
+/* thin scrollbars */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: #d6d3d1; border-radius: 8px; }
+
+@layer base {
+    :root {
+        --background: 40 20% 97%;
+        --foreground: 24 10% 10%;
+        --card: 0 0% 100%;
+        --card-foreground: 24 10% 10%;
+        --popover: 0 0% 100%;
+        --popover-foreground: 24 10% 10%;
+        --primary: 142 72% 29%;
+        --primary-foreground: 0 0% 100%;
+        --secondary: 45 96% 64%;
+        --secondary-foreground: 30 70% 24%;
+        --muted: 40 10% 94%;
+        --muted-foreground: 25 6% 40%;
+        --accent: 142 60% 95%;
+        --accent-foreground: 142 72% 24%;
+        --destructive: 0 72% 51%;
+        --destructive-foreground: 0 0% 100%;
+        --border: 30 8% 90%;
+        --input: 30 8% 90%;
+        --ring: 142 72% 29%;
+        --radius: 0.75rem;
+    }
+}
+
+@layer base {
+    * { @apply border-border; }
+    body { @apply bg-background text-foreground; }
+}
+
+@keyframes km-fade-up {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+.km-fade-up { animation: km-fade-up 0.4s ease-out both; }
