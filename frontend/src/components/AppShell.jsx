@@ -1,9 +1,11 @@
 import { Outlet, useNavigate, useLocation, Link } from "react-router-dom";
 import { WifiOff, Wheat, ChevronLeft, Settings } from "lucide-react";
+import { useEffect } from "react";
 import { BottomNav } from "@/components/BottomNav";
 import { LanguagePicker } from "@/components/LanguagePicker";
 import { useLang } from "@/context/LangContext";
 import { useOnline } from "@/lib/offline";
+import { runTaskReminders } from "@/lib/notifications";
 
 export function AppShell() {
   const { t } = useLang();
@@ -11,6 +13,10 @@ export function AppShell() {
   const nav = useNavigate();
   const loc = useLocation();
   const isHome = loc.pathname === "/";
+
+  useEffect(() => {
+    runTaskReminders();
+  }, [loc.pathname]);
 
   return (
     <div className="min-h-screen bg-[#F9F8F6] flex justify-center">

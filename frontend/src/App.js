@@ -16,6 +16,7 @@ import Guide from "@/pages/Guide";
 import Supplies from "@/pages/Supplies";
 import History from "@/pages/History";
 import Settings from "@/pages/Settings";
+import Diary from "@/pages/Diary";
 import { Loader2 } from "lucide-react";
 
 function Gate() {
@@ -41,6 +42,7 @@ function Gate() {
         <Route path="/guide" element={<Guide />} />
         <Route path="/supplies" element={<Supplies />} />
         <Route path="/history" element={<History />} />
+        <Route path="/diary" element={<Diary />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>

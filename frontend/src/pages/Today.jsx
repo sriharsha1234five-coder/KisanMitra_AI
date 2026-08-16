@@ -4,6 +4,7 @@ import { api, errText } from "@/lib/api";
 import { useLang } from "@/context/LangContext";
 import { ListenButton } from "@/components/ListenButton";
 import { cacheSet, cacheGet } from "@/lib/offline";
+import { getWeatherContext } from "@/components/WeatherCard";
 import { useOnline } from "@/lib/offline";
 import { toast } from "sonner";
 
@@ -26,6 +27,7 @@ export default function Today() {
       const { data } = await api.post("/daily-plan", {
         farm: farms[0] || {},
         tasks,
+        weather: getWeatherContext(),
         language: lang,
       });
       setPlan(data);

@@ -1,15 +1,24 @@
 import { useState } from "react";
-import { Settings as SettingsIcon, LogOut, Trash2, ShieldCheck, Info, Loader2 } from "lucide-react";
+import { Settings as SettingsIcon, LogOut, Trash2, ShieldCheck, Info, Loader2, Bell, BellRing } from "lucide-react";
 import { api, errText } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { useLang } from "@/context/LangContext";
 import { LanguagePicker } from "@/components/LanguagePicker";
+import { requestNotifications, notificationsEnabled, notificationsSupported } from "@/lib/notifications";
 import { toast } from "sonner";
 
 export default function Settings() {
   const { user, logout } = useAuth();
   const { t } = useLang();
   const [deleting, setDeleting] = useState(false);
+  const [notifOn, setNotifOn] = useState(notificationsEnabled());
+
+  const toggleNotif = async () => {
+    const ok = await requestNotifications();
+    setNotifOn(ok);
+    if (ok) toast.success(t("notifications_on"));
+    else toast.error("Notifications are blocked in your browser settings.");
+  };
 
   const deleteData = async () => {
     if (!window.confirm("Delete all your saved farms, tasks, history and chats? This cannot be undone.")) return;
@@ -38,6 +47,21 @@ export default function Settings() {
         <p className="text-xs font-bold uppercase tracking-wider text-stone-400">Language</p>
         <LanguagePicker />
       </div>
+
+      {notificationsSupported() && (
+        <div className="bg-white rounded-2xl border border-stone-200 p-5">
+          <div className="flex items-center gap-2 mb-2"><Bell className="w-5 h-5 text-green-700" /><p className="font-bold text-stone-800">{t("notifications")}</p></div>
+          <p className="text-stone-600 text-sm leading-relaxed mb-3">Get a reminder on your phone when a task or scheme deadline is due today.</p>
+          <button
+            data-testid="toggle-notifications"
+            onClick={toggleNotif}
+            disabled={notifOn}
+            className={`w-full h-12 rounded-xl font-semibold flex items-center justify-center gap-2 ${notifOn ? "bg-green-50 text-green-700 border-2 border-green-200" : "bg-green-700 text-white"}`}
+          >
+            {notifOn ? <><BellRing className="w-5 h-5" /> {t("notifications_on")}</> : <><Bell className="w-5 h-5" /> {t("enable_notifications")}</>}
+          </button>
+        </div>
+      )}
 
       <div className="bg-white rounded-2xl border border-stone-200 p-5 space-y-2">
         <div className="flex items-center gap-2"><Info className="w-5 h-5 text-green-700" /><p className="font-bold text-stone-800">About AI Assistance</p></div>

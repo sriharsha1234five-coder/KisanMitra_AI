@@ -33,6 +33,13 @@ Build a polished, mobile-first Progressive Web App "KisanMitra AI — Your AI Fa
 
 ## Testing
 - iteration_1: backend 100% (16/16), frontend 100% (15/15). No critical/minor issues.
+- iteration_2 (Weather, Reminders, Voice Onboarding, Photo Diary): backend 100% (13/13 new), frontend 100%. No blocking issues. Hardened diary endpoints (malformed id -> 404).
+
+## Implemented — iteration 2 (2026-06)
+- Live Weather: `/api/weather` (Open-Meteo, keyless) current + 3-day forecast; WeatherCard on Home; weather context fed into AI assessment and daily plan.
+- Push Reminders: browser Notification permission toggle in Settings; local reminders fire for due/overdue tasks when app is open (`lib/notifications.js`).
+- Voice-First Onboarding: `/api/farm/extract` (Gemini) turns spoken description into a structured farm profile; mic "Speak to set up" in My Farm add-farm sheet prefills fields.
+- Crop Photo Diary: `/api/diary` upload to Emergent Object Storage, dated timeline at `/diary`, images served as auth'd blobs; soft-delete.
 
 ## Backlog (not built)
 - P1: Live weather API context; browser push notifications for reminders

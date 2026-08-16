@@ -5,8 +5,10 @@ import os
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-from fastapi import FastAPI, APIRouter, HTTPException, Request, Depends, UploadFile, File, Form
+from fastapi import FastAPI, APIRouter, HTTPException, Request, Depends, UploadFile, File, Form, Header, Query
 from fastapi.responses import Response
+import httpx
+import requests
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, Field, EmailStr, BeforeValidator, ConfigDict
@@ -35,6 +37,44 @@ EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')
 JWT_SECRET = os.environ.get('JWT_SECRET', 'dev-secret')
 JWT_ALGORITHM = "HS256"
 GEMINI_MODEL = "gemini-3.1-pro-preview"
+
+# Object storage config
+STORAGE_BASE = (os.environ.get("INTEGRATION_PROXY_URL") or "").strip() or "https://integrations.emergentagent.com"
+STORAGE_URL = STORAGE_BASE.rstrip("/") + "/objstore/api/v1/storage"
+APP_NAME = "kisanmitra"
+storage_key = None
+
+MIME_TYPES = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "webp": "image/webp", "gif": "image/gif"}
+
+
+def init_storage(force: bool = False):
+    global storage_key
+    if storage_key and not force:
+        return storage_key
+    resp = requests.post(f"{STORAGE_URL}/init", json={"emergent_key": EMERGENT_LLM_KEY}, timeout=30)
+    resp.raise_for_status()
+    storage_key = resp.json()["storage_key"]
+    return storage_key
+
+
+def put_object(path: str, data: bytes, content_type: str) -> dict:
+    key = init_storage()
+    resp = requests.put(f"{STORAGE_URL}/objects/{path}", headers={"X-Storage-Key": key, "Content-Type": content_type}, data=data, timeout=120)
+    if resp.status_code == 404:
+        key = init_storage(force=True)
+        resp = requests.put(f"{STORAGE_URL}/objects/{path}", headers={"X-Storage-Key": key, "Content-Type": content_type}, data=data, timeout=120)
+    resp.raise_for_status()
+    return resp.json()
+
+
+def get_object(path: str):
+    key = init_storage()
+    resp = requests.get(f"{STORAGE_URL}/objects/{path}", headers={"X-Storage-Key": key}, timeout=60)
+    if resp.status_code == 404:
+        key = init_storage(force=True)
+        resp = requests.get(f"{STORAGE_URL}/objects/{path}", headers={"X-Storage-Key": key}, timeout=60)
+    resp.raise_for_status()
+    return resp.content, resp.headers.get("Content-Type", "application/octet-stream")
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("kisanmitra")
@@ -257,7 +297,8 @@ async def daily_plan(request: Request, user: dict = Depends(get_current_user)):
     lang_name = LANG_NAMES.get(lang, "English")
     farm = data.get("farm") or {}
     tasks = data.get("tasks") or []
-    ctx = f"Farm: {json.dumps(farm)}\nOpen tasks: {json.dumps(tasks)}"
+    weather = data.get("weather") or ""
+    ctx = f"Farm: {json.dumps(farm)}\nOpen tasks: {json.dumps(tasks)}\nToday's weather: {weather or 'not available'}"
     chat = new_chat(f"daily-{user['id']}-{uuid.uuid4()}", DAILY_SYSTEM)
     try:
         raw = await chat.send_message(UserMessage(text=f"Write in {lang_name}. {ctx}"))
@@ -458,10 +499,151 @@ async def root():
     return {"message": "KisanMitra AI backend running"}
 
 
+# ---------------- Weather (Open-Meteo, keyless) ----------------
+WEATHER_CODES = {
+    0: "Clear sky", 1: "Mainly clear", 2: "Partly cloudy", 3: "Overcast",
+    45: "Fog", 48: "Rime fog", 51: "Light drizzle", 53: "Drizzle", 55: "Heavy drizzle",
+    61: "Light rain", 63: "Rain", 65: "Heavy rain", 66: "Freezing rain", 67: "Freezing rain",
+    71: "Light snow", 73: "Snow", 75: "Heavy snow", 80: "Light showers", 81: "Showers",
+    82: "Heavy showers", 95: "Thunderstorm", 96: "Thunderstorm w/ hail", 99: "Thunderstorm w/ hail",
+}
+
+
+@api_router.get("/weather")
+async def weather(lat: Optional[float] = None, lon: Optional[float] = None, place: Optional[str] = None):
+    async with httpx.AsyncClient(timeout=15) as http:
+        if (lat is None or lon is None) and place:
+            g = await http.get("https://geocoding-api.open-meteo.com/v1/search",
+                               params={"name": place, "count": 1})
+            results = g.json().get("results") or []
+            if not results:
+                raise HTTPException(status_code=404, detail="Place not found. Try another town or city.")
+            lat, lon = results[0]["latitude"], results[0]["longitude"]
+            place = results[0].get("name")
+        if lat is None or lon is None:
+            raise HTTPException(status_code=400, detail="Location needed for weather.")
+        r = await http.get("https://api.open-meteo.com/v1/forecast", params={
+            "latitude": lat, "longitude": lon,
+            "current": "temperature_2m,relative_humidity_2m,precipitation,weather_code,wind_speed_10m",
+            "daily": "weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max",
+            "timezone": "auto", "forecast_days": 3,
+        })
+    d = r.json()
+    cur = d.get("current", {})
+    daily = d.get("daily", {})
+    forecast = []
+    for i in range(len(daily.get("time", []))):
+        forecast.append({
+            "date": daily["time"][i],
+            "condition": WEATHER_CODES.get(daily["weather_code"][i], "—"),
+            "max": daily["temperature_2m_max"][i],
+            "min": daily["temperature_2m_min"][i],
+            "rain": daily["precipitation_sum"][i],
+            "rain_prob": daily.get("precipitation_probability_max", [None] * 3)[i],
+        })
+    return {
+        "place": place,
+        "current": {
+            "temp": cur.get("temperature_2m"),
+            "humidity": cur.get("relative_humidity_2m"),
+            "precipitation": cur.get("precipitation"),
+            "wind": cur.get("wind_speed_10m"),
+            "condition": WEATHER_CODES.get(cur.get("weather_code"), "—"),
+        },
+        "forecast": forecast,
+    }
+
+
+# ---------------- Voice-first farm profile extraction ----------------
+EXTRACT_SYSTEM = (
+    "You extract a farm profile from a farmer's free-form spoken/typed description. "
+    "Return ONLY valid JSON with these keys (use empty string if not mentioned, do NOT invent): "
+    '{"name":"short farm name","crop":"","variety":"","growth_stage":"","soil_type":"","irrigation":"","location":""}. '
+    "Keep values short and in the same language as the input where natural, but crop/soil/irrigation may stay in English."
+)
+
+
+@api_router.post("/farm/extract")
+async def farm_extract(request: Request, user: dict = Depends(get_current_user)):
+    data = await request.json()
+    text = (data.get("text") or "").strip()
+    lang = data.get("language", "en")
+    if not text:
+        raise HTTPException(status_code=400, detail="No description provided.")
+    chat = new_chat(f"extract-{user['id']}-{uuid.uuid4()}", EXTRACT_SYSTEM)
+    try:
+        raw = await chat.send_message(UserMessage(text=f"Language: {LANG_NAMES.get(lang, 'English')}\nFarmer says: {text}"))
+        fields = json.loads(strip_json(raw))
+    except Exception as e:
+        logger.error(f"extract error: {e}")
+        raise HTTPException(status_code=502, detail="Could not understand. Please try again or type the details.")
+    allowed = ["name", "crop", "variety", "growth_stage", "soil_type", "irrigation", "location"]
+    return {"fields": {k: fields.get(k, "") for k in allowed}}
+
+
+# ---------------- Crop Photo Diary ----------------
+@api_router.post("/diary")
+async def add_diary(file: UploadFile = File(...), note: str = Form(""), crop: str = Form(""),
+                    farm_id: str = Form(""), user: dict = Depends(get_current_user)):
+    ext = (file.filename.rsplit(".", 1)[-1].lower() if "." in (file.filename or "") else "jpg")
+    if ext not in MIME_TYPES:
+        ext = "jpg"
+    content = await file.read()
+    if len(content) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Image too large (max 10MB).")
+    path = f"{APP_NAME}/uploads/{user['id']}/{uuid.uuid4()}.{ext}"
+    try:
+        result = put_object(path, content, file.content_type or MIME_TYPES[ext])
+    except Exception as e:
+        logger.error(f"diary upload error: {e}")
+        raise HTTPException(status_code=502, detail="Could not save photo right now. Please try again.")
+    doc = {"user_id": user["id"], "storage_path": result["path"], "content_type": file.content_type or MIME_TYPES[ext],
+           "note": note, "crop": crop, "farm_id": farm_id, "is_deleted": False, "created_at": now_iso()}
+    res = await db.diary.insert_one(doc)
+    return clean(doc)
+
+
+@api_router.get("/diary")
+async def list_diary(user: dict = Depends(get_current_user)):
+    docs = await db.diary.find({"user_id": user["id"], "is_deleted": {"$ne": True}}).sort("created_at", -1).to_list(300)
+    return [clean(d) for d in docs]
+
+
+@api_router.get("/diary/{item_id}/image")
+async def diary_image(item_id: str, user: dict = Depends(get_current_user)):
+    try:
+        oid = ObjectId(item_id)
+    except Exception:
+        raise HTTPException(status_code=404, detail="Photo not found")
+    doc = await db.diary.find_one({"_id": oid, "user_id": user["id"]})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Photo not found")
+    data, ctype = get_object(doc["storage_path"])
+    return Response(content=data, media_type=doc.get("content_type", ctype),
+                    headers={"Cache-Control": "private, max-age=86400"})
+
+
+@api_router.delete("/diary/{item_id}")
+async def delete_diary(item_id: str, user: dict = Depends(get_current_user)):
+    try:
+        oid = ObjectId(item_id)
+    except Exception:
+        raise HTTPException(status_code=404, detail="Photo not found")
+    res = await db.diary.update_one({"_id": oid, "user_id": user["id"]}, {"$set": {"is_deleted": True}})
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Photo not found")
+    return {"ok": True}
+
+
 # ---------------- Startup ----------------
 @app.on_event("startup")
 async def startup():
     await db.users.create_index("email", unique=True)
+    try:
+        init_storage()
+        logger.info("Object storage initialized")
+    except Exception as e:
+        logger.error(f"Storage init failed: {e}")
     admin_email = os.environ.get("ADMIN_EMAIL", "admin@kisanmitra.ai").lower()
     admin_password = os.environ.get("ADMIN_PASSWORD", "admin123")
     existing = await db.users.find_one({"email": admin_email})

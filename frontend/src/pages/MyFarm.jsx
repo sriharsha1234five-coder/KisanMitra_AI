@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
-import { Sprout, Plus, Trash2, Loader2, X } from "lucide-react";
+import { Sprout, Plus, Trash2, Loader2, X, Mic } from "lucide-react";
 import { api, errText } from "@/lib/api";
 import { useLang } from "@/context/LangContext";
+import { VoiceButton } from "@/components/VoiceButton";
 import { cacheSet, cacheGet } from "@/lib/offline";
 import { useOnline } from "@/lib/offline";
 import { toast } from "sonner";
@@ -17,13 +18,24 @@ const FIELDS = [
 ];
 
 export default function MyFarm() {
-  const { t } = useLang();
+  const { lang, t } = useLang();
   const online = useOnline();
   const [farms, setFarms] = useState(cacheGet("farms", []));
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({});
   const [saving, setSaving] = useState(false);
+  const [extracting, setExtracting] = useState(false);
+
+  const extractFromVoice = async (text) => {
+    if (!text?.trim()) return;
+    setExtracting(true);
+    try {
+      const { data } = await api.post("/farm/extract", { text, language: lang });
+      setForm((f) => ({ ...f, ...Object.fromEntries(Object.entries(data.fields).filter(([, v]) => v)) }));
+      toast.success("Filled from your voice. Please review.");
+    } catch (e) { toast.error(errText(e)); } finally { setExtracting(false); }
+  };
 
   const load = async () => {
     try {
@@ -109,6 +121,17 @@ export default function MyFarm() {
               <h2 className="text-xl font-bold font-[Manrope]">{t("add_farm")}</h2>
               <button onClick={() => setShowForm(false)}><X className="w-6 h-6 text-stone-500" /></button>
             </div>
+
+            {/* Voice-first setup */}
+            <div className="rounded-2xl bg-green-50 border border-green-100 p-4 flex flex-col items-center gap-2">
+              {extracting ? (
+                <div className="flex items-center gap-2 text-green-800 font-semibold h-12"><Loader2 className="w-5 h-5 animate-spin" /> {t("analyzing")}</div>
+              ) : (
+                <VoiceButton onResult={extractFromVoice} />
+              )}
+              <p className="text-sm text-green-800 font-medium text-center flex items-center gap-1"><Mic className="w-4 h-4" /> {t("speak_to_setup")}: say your crop, soil, irrigation and village</p>
+            </div>
+
             {FIELDS.map(([k, ph]) => (
               <input
                 key={k}

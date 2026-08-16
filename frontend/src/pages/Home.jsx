@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
-import { Mic, Keyboard, Camera, Sun, Landmark, MapPin, ListTodo, BookOpen, History, Sparkles } from "lucide-react";
+import { Mic, Keyboard, Camera, Sun, Landmark, MapPin, ListTodo, BookOpen, History, Sparkles, Images } from "lucide-react";
 import { useLang } from "@/context/LangContext";
+import { WeatherCard } from "@/components/WeatherCard";
 
 const HERO_IMG =
   "https://images.unsplash.com/photo-1701781245882-dcbb6ce18c5b?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDQ2Mzl8MHwxfHNlYXJjaHwxfHxmYXJtZXIlMjB1c2luZyUyMHNtYXJ0cGhvbmUlMjBhZ3JpY3VsdHVyZXxlbnwwfHx8fDE3ODY5MTAxOTN8MA&ixlib=rb-4.1.0&q=85";
@@ -17,6 +18,7 @@ export default function Home() {
 
   const SHORTCUTS = [
     { key: "today_plan", icon: Sun, to: "/today" },
+    { key: "diary", icon: Images, to: "/diary" },
     { key: "schemes", icon: Landmark, to: "/schemes" },
     { key: "supplies", icon: MapPin, to: "/supplies" },
     { key: "tasks", icon: ListTodo, to: "/tasks" },
@@ -35,6 +37,9 @@ export default function Home() {
           <h1 className="text-2xl font-extrabold font-[Manrope] leading-tight mt-1">{t("home_greeting")}</h1>
         </div>
       </div>
+
+      {/* Weather */}
+      <WeatherCard />
 
       {/* Primary actions */}
       <div className="space-y-3">

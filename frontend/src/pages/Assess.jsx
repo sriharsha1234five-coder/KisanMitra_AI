@@ -7,6 +7,7 @@ import { VoiceButton } from "@/components/VoiceButton";
 import { AgentSwarm } from "@/components/AgentSwarm";
 import { AssessmentCard } from "@/components/AssessmentCard";
 import { cacheSet, cacheGet } from "@/lib/offline";
+import { getWeatherContext } from "@/components/WeatherCard";
 import { toast } from "sonner";
 
 const DEMO = {
@@ -70,6 +71,7 @@ export default function Assess() {
     try {
       const { data } = await api.post("/assess", {
         ...form,
+        weather: form.weather || getWeatherContext(),
         problem,
         image_base64: image,
         language: lang,
