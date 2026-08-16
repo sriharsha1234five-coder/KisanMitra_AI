@@ -4,6 +4,8 @@ import { api } from "@/lib/api";
 import { useLang } from "@/context/LangContext";
 import { cacheSet, cacheGet } from "@/lib/offline";
 import { useOnline } from "@/lib/offline";
+import { WeatherAlerts, alertTitle } from "@/components/WeatherAlerts";
+import { runWeatherAlertNotifications } from "@/lib/notifications";
 
 // Compact weather card. Auto-uses saved coords; offers "use my location".
 export function WeatherCard() {
@@ -20,6 +22,7 @@ export function WeatherCard() {
       const { data } = await api.get("/weather", { params: { lat, lon } });
       setData(data);
       cacheSet("weather", data);
+      runWeatherAlertNotifications(data.alerts, (a) => alertTitle(a, t, data.forecast));
     } catch (e) {
       setError(true);
     } finally {
@@ -80,6 +83,7 @@ export function WeatherCard() {
 
   const c = data.current;
   return (
+    <div className="space-y-3">
     <div data-testid="weather-card" className="rounded-2xl bg-gradient-to-br from-sky-600 to-sky-500 text-white p-5">
       <div className="flex items-center justify-between">
         <div>
@@ -118,6 +122,8 @@ export function WeatherCard() {
         </div>
       )}
     </div>
+    <WeatherAlerts alerts={data.alerts} forecast={data.forecast} />
+    </div>
   );
 }
 
@@ -126,5 +132,9 @@ export function getWeatherContext() {
   const data = cacheGet("weather", null);
   if (!data?.current) return "";
   const c = data.current;
-  return `${c.condition}, ${Math.round(c.temp)}°C, humidity ${c.humidity}%, recent rain ${c.precipitation}mm`;
+  let ctx = `${c.condition}, ${Math.round(c.temp)}°C, humidity ${c.humidity}%, recent rain ${c.precipitation}mm`;
+  if (data.alerts?.length) {
+    ctx += ". Upcoming alerts: " + data.alerts.map((a) => `${a.type} (${a.severity})`).join(", ");
+  }
+  return ctx;
 }

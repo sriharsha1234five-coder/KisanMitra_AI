@@ -49,3 +49,22 @@ export async function runTaskReminders() {
     });
   if (changed) cacheSet("km_notified", notified);
 }
+
+// Fire a browser notification for high-severity (warning) weather alerts, once per day.
+export function runWeatherAlertNotifications(alerts, titleFor) {
+  if (!notificationsEnabled() || !alerts?.length) return;
+  const notified = cacheGet("km_weather_notified", {});
+  const todayKey = new Date().toISOString().slice(0, 10);
+  let changed = false;
+  alerts
+    .filter((a) => a.severity === "warning")
+    .forEach((a) => {
+      const key = `${a.type}_${todayKey}`;
+      if (!notified[key]) {
+        showNotification("KisanMitra weather alert", titleFor(a));
+        notified[key] = true;
+        changed = true;
+      }
+    });
+  if (changed) cacheSet("km_weather_notified", notified);
+}

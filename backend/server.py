@@ -551,7 +551,39 @@ async def weather(lat: Optional[float] = None, lon: Optional[float] = None, plac
             "condition": WEATHER_CODES.get(cur.get("weather_code"), "—"),
         },
         "forecast": forecast,
+        "alerts": compute_weather_alerts(cur, forecast),
     }
+
+
+def compute_weather_alerts(cur: dict, forecast: list) -> list:
+    """Structured crop-protection alerts. Frontend localizes the display text."""
+    alerts = []
+    if (cur.get("precipitation") or 0) >= 10:
+        alerts.append({"type": "rain_now", "severity": "warning", "day_index": 0, "value": cur.get("precipitation")})
+    if (cur.get("wind_speed_10m") or 0) >= 40:
+        alerts.append({"type": "wind", "severity": "warning", "day_index": 0, "value": round(cur.get("wind_speed_10m"))})
+    for i, f in enumerate(forecast):
+        rain = f.get("rain")
+        prob = f.get("rain_prob")
+        tmax = f.get("max")
+        if rain is not None and (rain >= 25 or (prob is not None and prob >= 80)):
+            alerts.append({"type": "heavy_rain", "severity": "warning", "day_index": i, "value": round(rain)})
+        elif rain is not None and (rain >= 12 or (prob is not None and prob >= 60)):
+            alerts.append({"type": "heavy_rain", "severity": "watch", "day_index": i, "value": round(rain)})
+        if tmax is not None and tmax >= 40:
+            alerts.append({"type": "heat", "severity": "warning", "day_index": i, "value": round(tmax)})
+        elif tmax is not None and tmax >= 37:
+            alerts.append({"type": "heat", "severity": "watch", "day_index": i, "value": round(tmax)})
+    # keep the most important, de-duplicated by (type, severity), cap to 4
+    seen = set()
+    out = []
+    for a in sorted(alerts, key=lambda x: (x["severity"] != "warning", x["day_index"])):
+        key = (a["type"], a["severity"])
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(a)
+    return out[:4]
 
 
 # ---------------- Voice-first farm profile extraction ----------------
